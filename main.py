@@ -32,8 +32,7 @@ while True:
     keys = pygame.key.get_pressed()
     if keys[pygame.K_ESCAPE]: close(highscore)
     
-    if field.mat[2] != [0]*W: # game ends when top visible has a block
-        gameover = True
+    if field.mat[2] != [0]*W: gameover = True # game ends when top visible has a block
 
     # react to input
     if keys[pygame.K_q] and not gameover: # pause
@@ -53,14 +52,12 @@ while True:
         if keys[pygame.K_LEFT]: # move left
             pygame.time.delay(input_delay)
             shape.x -= 1
-            if collision(shape,field.mat):
-                shapes[-1].x += 1
+            if collision(shape,field.mat): shape.x += 1
 
         elif keys[pygame.K_RIGHT]: # move right
             pygame.time.delay(input_delay)
             shape.x += 1
-            if collision(shape,field.mat):
-                shape.x -= 1
+            if collision(shape,field.mat): shape.x -= 1
         
         elif keys[pygame.K_UP]: # rotate
             pygame.time.delay(input_delay)
@@ -98,9 +95,7 @@ while True:
             swapped = True
 
         step += 1   
-        if step % fall_speed == 0: # shape drops every fall_speed frames
-            for s in shapes:
-                s.drop(field)    
+        if step % fall_speed == 0: shape.drop(field)# shape drops every fall_speed frames 
     
         shape.x = max(0,min(W-len(shape.mat[0]),shapes[-1].x)) # adjust x position of shape
         highscore = max(highscore,score)
@@ -114,14 +109,12 @@ while True:
         for r in range(len(ghost.mat)):
             for c in range(len(ghost.mat[0])):
                 if ghost.mat[r][c]: ghost.mat[r][c] = 8
-        while not collision(ghost,field.mat):
-            ghost.y += 1    
+        while not collision(ghost,field.mat): ghost.y += 1    
         ghost.y -= 1
         draw(ghost.mat,(P+P*ghost.x,P+P*ghost.y),screen,P,True)
 
-    for s in shapes: # draw current hape
-        if s.enabled:
-            draw(s.mat,(P+P*s.x,P+P*s.y),screen,P,True)
+    # draw current shape
+    if shapes[-1].enabled: draw(shapes[-1].mat,(P+P*shapes[-1].x,P+P*shapes[-1].y),screen,P,True)
 
     if not shape.enabled: # generate a new shape if the current one is disabled
         shapes.pop()
@@ -133,17 +126,18 @@ while True:
     pygame.draw.rect(screen,color_lookup[9],(0,0,P*(W+2),P*3)) # hud background
 
     # render score and highscore
-    sc = font.render(f'score:{score:06}',True,color_lookup[8])
+    sc = font.render(f'score:{score:04}',True,color_lookup[8])
     rsc = sc.get_rect()
     rsc.topleft = (P,P//2)
     if not gameover: screen.blit(sc,rsc)
-    hs = font.render(f'high :{highscore:06}',True,color_lookup[8])
+    hs = font.render(f'high :{highscore:04}',True,color_lookup[8])
     rhs = hs.get_rect()
     rhs.topleft = (P,P+P//2)
     screen.blit(hs,rhs)
 
     if gameover: screen.blit(rs,rrs) # render restart prompt if needed
     
+    # display hold and next text
     screen.blit(ho,hor)
     screen.blit(ne,ner)
 

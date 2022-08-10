@@ -2,14 +2,19 @@ import pygame, random # to run game and generate random pieces
 from copy import deepcopy as copy # to copy the content of a piece for the ghost
 from os import path
 
+# ================================================================================
+
 P = 70 # cell size in pixels
-W = 10 # playfield width in cells
-H = 24 # playfield height in cells
 input_delay = 10 # delay on input in milliseconds
 delay = 50 # constant delay in milliseconds
 max_grace = 4 # number of grace moves
 projection = True # whether the ghost piece appears
 fall_speed = 4 # number of frames between every shape drop
+
+# ================================================================================
+
+W = 10 # playfield width in cells
+H = 24 # playfield height in cells
 
 dir = path.dirname(path.realpath(__file__))
 with open(f'{dir}/high.txt','r') as f:
@@ -166,25 +171,21 @@ class Field:
         x,y = off
         for r in range(len(shape.mat)): # add all non-0 values from the shape matrix to the field matrix
             for c in range(len(shape.mat[0])):
-                if shape.mat[r][c]:
-                    self.mat[y+r][x+c] = shape.mat[r][c]    
+                if shape.mat[r][c]: self.mat[y+r][x+c] = shape.mat[r][c]    
 
 def draw(g,off,scr,p,shape=False) -> None: # draw a matrix with a given offset on the screen
     x, y = off
     for r in range(len(g)):
         for c in range(len(g[0])):
-            if g[r][c] or not shape: 
-                pygame.draw.rect(scr, color_lookup[g[r][c]], (x+c*p,y+r*p,p,p))
+            if g[r][c] or not shape:  pygame.draw.rect(scr, color_lookup[g[r][c]], (x+c*p,y+r*p,p,p))
             
 def collision(s,g) -> bool: # check of two matrices collide
     x, y = s.x, s.y
     for r in range(len(s.mat)):
         for c,cell in enumerate(s.mat[r]):
             try:
-                if cell and g[y+r][x+c]:
-                    return True
-            except IndexError:
-                return True
+                if cell and g[y+r][x+c]: return True
+            except IndexError: return True
     return False
                     
 def new_shape(typ=None): # generate a new shape
