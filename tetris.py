@@ -238,7 +238,7 @@ while __name__ == '__main__': # event loop
     keys = pygame.key.get_pressed()
     if keys[pygame.K_ESCAPE]: close(highscore)
     
-    if field.mat[2] != [0]*W: gameover = True # game ends when top visible has a block
+    if field.mat[2] != [0]*W: gameover = True # game ends when top visible row has a block
 
     # react to input
     if keys[pygame.K_q] and not gameover: # pause
