@@ -128,7 +128,7 @@ class Shape:
             self.index -= 1
             self.mat = mat
 
-    def drop(self,f,ghost=False) -> None: # move one cell down
+    def drop(self,f) -> None: # move one cell down
         self.y += 1
         if collision(self,f.mat) and self.enabled and not self.grace: # if no grace moves left on collision, add shape to heap
             f.add_shape(self,(self.x,self.y-1))
@@ -139,9 +139,9 @@ class Shape:
         elif not collision: # if there is no collision, grace movements reset
             self.grace = max_grace
 
-    def hard_drop(self,f,ghost=False) -> None: # drop until collision
+    def hard_drop(self,f) -> None: # drop until collision
         while not collision(self,f.mat):
-            self.drop(f,True)
+            self.drop(f)
 
 class Field:
     def __init__(self,w:int,h:int):
@@ -187,8 +187,10 @@ def collision(s,g) -> bool: # check of two matrices collide
                 return True
     return False
                     
-def new_shape(): # generate a new shape
-    return Shape((-1,random.randint(0,W)),random.choice(typestrings))
+def new_shape(typ=None): # generate a new shape
+    if typ == None:
+        typ = random.choice(typestrings)
+    return Shape((-1,random.randint(0,W)),typ)
 
 def close(high) -> None: # save highscore and exit
     with open(f'{dir}/high.txt','w') as f:
@@ -197,4 +199,7 @@ def close(high) -> None: # save highscore and exit
     exit()
 
 shapes = [new_shape()] # start with one random shape
+nexts = [random.choice(typestrings),random.choice(typestrings),random.choice(typestrings)]
+hold = 0
 field = Field(W,H)
+swapped = False

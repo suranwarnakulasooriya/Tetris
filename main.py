@@ -2,17 +2,27 @@ from tetris import *
 
 pygame.init()
 pygame.font.init()
-screen = pygame.display.set_mode((P*(W+2),P*(H+2)))
+screen = pygame.display.set_mode((P*(W+5),P*(H+2)))
 pygame.display.set_caption('Tetris')
 font = pygame.font.Font(f'{dir}/font.ttf',P//2)
 pygame.event.set_blocked(pygame.MOUSEMOTION) # block mouse movement
 
+# restart prompt
 rs = font.render('press R to restart',True,color_lookup[8])
 rrs = rs.get_rect()
 rrs.topleft = (P,P//2)
 
+# hold text
+ho = font.render('hold',True,color_lookup[8])
+hor = ho.get_rect()
+hor.topleft = (P*(W+2),P//2)
+
+# next text
+ne = font.render('next',True,color_lookup[8])
+ner = ho.get_rect()
+ner.topleft = (P*(W+2),P*3)
+
 while True:
-    #screen.fill('#20242d')
     screen.fill(color_lookup[9])
     shape = shapes[-1] # currently active shape
 
@@ -35,6 +45,9 @@ while True:
         field.reset()
         shapes = [new_shape()]
         score = 0
+        hold = 0
+        nexts = [random.choice(typestrings),random.choice(typestrings),random.choice(typestrings)]
+        swapped = False
 
     if not paused and not gameover:
         if keys[pygame.K_LEFT]: # move left
@@ -62,10 +75,27 @@ while True:
                 score -= 1
 
         elif keys[pygame.K_SPACE] and shape.y > 1: # hard drop
-            y = shape.y
             pygame.time.delay(input_delay)
+            y = shape.y
             shape.hard_drop(field)
             score += 2*(shape.y-y)
+
+        elif keys[pygame.K_h] and not swapped: # hold
+            pygame.time.delay(input_delay*2)
+            if not hold:
+                hold = new_shape(shape.type)
+                shapes.pop()
+                shapes.append(new_shape(nexts[-1]))
+                nexts.pop(-1)
+                nexts.insert(0,random.choice(typestrings))
+            else:
+                temp = copy(hold)
+                hold = new_shape(shape.type)
+                shapes.pop()
+                shapes.append(copy(temp))
+                shape = shapes[-1]
+                del temp
+            swapped = True
 
         step += 1   
         if step % fall_speed == 0: # shape drops every fall_speed frames
@@ -79,7 +109,7 @@ while True:
     draw(field.mat,(P,P),screen,P) # draw field
 
     # project shape
-    if projection:
+    if projection and shape.enabled:
         ghost = copy(shape)
         for r in range(len(ghost.mat)):
             for c in range(len(ghost.mat[0])):
@@ -95,7 +125,10 @@ while True:
 
     if not shape.enabled: # generate a new shape if the current one is disabled
         shapes.pop()
-        shapes.append(new_shape())
+        shapes.append(new_shape(nexts[-1]))
+        nexts.pop(-1)
+        nexts.insert(0,random.choice(typestrings))
+        swapped = False
 
     pygame.draw.rect(screen,color_lookup[9],(0,0,P*(W+2),P*3)) # hud background
 
@@ -109,7 +142,16 @@ while True:
     rhs.topleft = (P,P+P//2)
     screen.blit(hs,rhs)
 
-    if gameover: screen.blit(rs,rrs) # render restard prompt if needed
+    if gameover: screen.blit(rs,rrs) # render restart prompt if needed
+    
+    screen.blit(ho,hor)
+    screen.blit(ne,ner)
+
+    for i,n in enumerate(nexts[::-1]): # draw next shapes
+        s = Shape((0,0),n)
+        draw(s.mat,((W+2)*P,2*(i+2)*P),screen,P//2,True)
+
+    if hold: draw(hold.mat,((W+2)*P,P*3//2),screen,P//2,True) # draw held shape
     
     pygame.time.delay(delay)
     pygame.display.update()
