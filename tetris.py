@@ -88,7 +88,7 @@ shape_types = {
     [[[7,7],
       [7,7]]]}
 
-colors_classic = [
+color_lookup = [
     '#282c34',
     '#c678dd',
     '#98c379',
@@ -99,20 +99,6 @@ colors_classic = [
     '#e5c07b',
     '#abb2bf',
     '#20242d']
-
-colors_web = [
-    '#f4f4f2',
-    '#9b51e0',
-    '#9b51e0',
-    '#9b51e0',
-    '#9b51e0',
-    '#9b51e0',
-    '#9b51e0',
-    '#9b51e0',
-    '#1a1a1a',
-    '#f4f4f2']
-
-color_lookup = colors_classic
 
 class Shape:
     def __init__(self,pos:(int,int),typ:str,index:int=0):
