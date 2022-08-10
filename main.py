@@ -1,103 +1,115 @@
 from tetris import *
 
+pygame.init()
+pygame.font.init()
 screen = pygame.display.set_mode((P*(W+2),P*(H+2)))
 pygame.display.set_caption('Tetris')
-field = Field(W,H)
-pygame.event.set_blocked(pygame.MOUSEMOTION)
+font = pygame.font.Font(f'{dir}/font.ttf',P//2)
+pygame.event.set_blocked(pygame.MOUSEMOTION) # block mouse movement
 
-#s = Shape((0,0),random.choice(typestrings))
-shapes = [new_shape()]
-step = 1
+rs = font.render('press R to restart',True,color_lookup[8])
+rrs = rs.get_rect()
+rrs.topleft = (P,P//2)
 
 while True:
-    screen.fill('#20242d')
-    #pygame.draw.rect(screen,color_lookup[0],(P,P,W-P,H-P))
+    #screen.fill('#20242d')
+    screen.fill(color_lookup[9])
+    shape = shapes[-1] # currently active shape
 
+    # exit scenarios
     for event in pygame.event.get():
-        if event.type == pygame.QUIT: exit()
+        if event.type == pygame.QUIT: close(highscore)
     keys = pygame.key.get_pressed()
-    if keys[pygame.K_ESCAPE]: exit()
-    if field.mat[2] != [0]*W: exit()
-
+    if keys[pygame.K_ESCAPE]: close(highscore)
     
-    #if not collision(shapes[-1],field.mat):
+    if field.mat[2] != [0]*W: # game ends when top visible has a block
+        gameover = True
 
-    if keys[pygame.K_LEFT]:
-        pygame.time.delay(10)
-        shapes[-1].x -= 1
-        if collision(shapes[-1],field.mat):
-            shapes[-1].x += 1
-    #shapes[-1].x = max(0,shapes[-1].x)
-    if keys[pygame.K_RIGHT]:
-        pygame.time.delay(10)
-        shapes[-1].x += 1
-        if collision(shapes[-1],field.mat):
-            shapes[-1].x -= 1
-        #shapes[-1].x = max(W-1,shapes[-1].x)
-    
-    if keys[pygame.K_UP]:
-        pygame.time.delay(10)
-        #shapes[-1].rotate(shapes[-1].mat)
-        #shapes[-1].chamber(field)
-        shapes[-1].rotate()
-        if collision(shapes[-1],field.mat):
-            for _ in range(3):
-                shapes[-1].rotate()
+    # react to input
+    if keys[pygame.K_q] and not gameover: # pause
+        pygame.time.delay(input_delay)
+        paused = not paused
 
-    if keys[pygame.K_DOWN]:
-        pygame.time.delay(10)
-        shapes[-1].y += 1
-        if collision(shapes[-1],field.mat):
+    if keys[pygame.K_r] and gameover: # restart
+        gameover = False
+        field.reset()
+        shapes = [new_shape()]
+        score = 0
+
+    if not paused and not gameover:
+        if keys[pygame.K_LEFT]: # move left
+            pygame.time.delay(input_delay)
+            shape.x -= 1
+            if collision(shape,field.mat):
+                shapes[-1].x += 1
+
+        elif keys[pygame.K_RIGHT]: # move right
+            pygame.time.delay(input_delay)
+            shape.x += 1
+            if collision(shape,field.mat):
+                shape.x -= 1
+        
+        elif keys[pygame.K_UP]: # rotate
+            pygame.time.delay(input_delay)
+            shape.chamber(field.mat)
+
+        elif keys[pygame.K_DOWN]: # soft drop
+            pygame.time.delay(input_delay)
+            shape.y += 1
+            score += 1
+            if collision(shape,field.mat):
                 shapes[-1].y -= 1
+                score -= 1
 
-    if keys[pygame.K_SPACE]:
-        pygame.time.delay(10)
-        shapes[-1].hard_drop(field)
+        elif keys[pygame.K_SPACE] and shape.y > 1: # hard drop
+            y = shape.y
+            pygame.time.delay(input_delay)
+            shape.hard_drop(field)
+            score += 2*(shape.y-y)
 
-    z = 0
-    b = 0
-    for r in shapes[-1].mat:
-        if r[-1] == 0:
-            z += 1
+        step += 1   
+        if step % fall_speed == 0: # shape drops every fall_speed frames
+            for s in shapes:
+                s.drop(field)    
+    
+        shape.x = max(0,min(W-len(shape.mat[0]),shapes[-1].x)) # adjust x position of shape
+        highscore = max(highscore,score)
+    
+    score = field.clear(score) # clear filled rows and increase score
+    draw(field.mat,(P,P),screen,P) # draw field
 
-    if z == len(r):
-        b = 1
-    
-    shapes[-1].x = max(0,min(W-len(shapes[-1].mat[0]),shapes[-1].x))
-    
-    #shapes[-1].hard_drop(field,True)'''
-    
-    ghost = copy(shapes[-1])
-    for r in range(len(ghost.mat)):
-        for c in range(len(ghost.mat[0])):
-            if ghost.mat[r][c]: ghost.mat[r][c] = 8
-    
-    while not collision(ghost,field.mat):# or ghost.y+len(ghost.mat) < H-1:
-        ghost.y += 1    
-    ghost.y -= 1
+    # project shape
+    if projection:
+        ghost = copy(shape)
+        for r in range(len(ghost.mat)):
+            for c in range(len(ghost.mat[0])):
+                if ghost.mat[r][c]: ghost.mat[r][c] = 8
+        while not collision(ghost,field.mat):
+            ghost.y += 1    
+        ghost.y -= 1
+        draw(ghost.mat,(P+P*ghost.x,P+P*ghost.y),screen,P,True)
 
-    #print(shapes[-1].x)
-
-    pygame.time.delay(50)
-    
-    if step % 2 == 0:
-        for s in shapes:
-            s.drop(field)    
-    
-    field.clear()
-    
-    draw(field.mat,(P,P),screen,P)
-    draw(ghost.mat,(P+P*ghost.x,P+P*ghost.y),screen,P,True)
-
-    for s in shapes:
+    for s in shapes: # draw current hape
         if s.enabled:
             draw(s.mat,(P+P*s.x,P+P*s.y),screen,P,True)
-    
-    #print(s.enabled)
-    if not shapes[-1].enabled:
+
+    if not shape.enabled: # generate a new shape if the current one is disabled
         shapes.pop()
         shapes.append(new_shape())
 
-    pygame.draw.rect(screen,'#20242d',(0,0,P*(W+2),P*3))
+    pygame.draw.rect(screen,color_lookup[9],(0,0,P*(W+2),P*3)) # hud background
+
+    # render score and highscore
+    sc = font.render(f'score:{score:06}',True,color_lookup[8])
+    rsc = sc.get_rect()
+    rsc.topleft = (P,P//2)
+    if not gameover: screen.blit(sc,rsc)
+    hs = font.render(f'high :{highscore:06}',True,color_lookup[8])
+    rhs = hs.get_rect()
+    rhs.topleft = (P,P+P//2)
+    screen.blit(hs,rhs)
+
+    if gameover: screen.blit(rs,rrs) # render restard prompt if needed
+    
+    pygame.time.delay(delay)
     pygame.display.update()
-    step += 1
