@@ -159,7 +159,7 @@ class Field:
             for c in range(len(shape.mat[0])):
                 if shape.mat[r][c]: self.mat[y+r][x+c] = shape.mat[r][c]    
 
-def draw(g,off,scr,p,shape=False) -> None: # draw a matrix with a given offset on the screen
+def draw(g,off:(int,int),scr,p:int,shape=False) -> None: # draw a matrix with a given offset on the screen
     x, y = off
     for r in range(len(g)):
         for c in range(len(g[0])):
@@ -179,7 +179,7 @@ def new_shape(typ=None): # generate a new shape
         typ = random.choice(typestrings)
     return Shape((-1,random.randint(0,W)),typ)
 
-def close(high) -> None: # save highscore and exit
+def close(high:int) -> None: # save highscore and exit
     with open(f'{dir}/high.txt','w') as f:
         f.write(str(high))
         f.close()
