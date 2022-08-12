@@ -16,6 +16,7 @@ fall_speed = 4 # number of frames between every shape drop
 W = 10 # playfield width in cells
 H = 24 # playfield height in cells
 
+# read highscore from file
 dir = path.dirname(path.realpath(__file__))
 with open(f'{dir}/high.txt','r') as f:
     highscore = f.read()
@@ -89,16 +90,16 @@ shape_types = {
       [7,7]]]}
 
 color_lookup = [
-    '#282c34',
-    '#c678dd',
-    '#98c379',
-    '#e06c75',
-    '#61afef',
-    '#d19a66',
-    '#56b6c2',
-    '#e5c07b',
-    '#abb2bf',
-    '#20242d']
+    '#282c34', # background
+    '#c678dd', # purple
+    '#98c379', # green
+    '#e06c75', # red
+    '#61afef', # blue
+    '#d19a66', # orange
+    '#56b6c2', # teal
+    '#e5c07b', # yellow
+    '#abb2bf', # white
+    '#20242d'] # hud
 
 class Shape:
     def __init__(self,pos:(int,int),typ:str,index:int=0):
@@ -107,6 +108,7 @@ class Shape:
         self.y, self.x = pos
         self.x = min(self.x,W-len(self.mat[0])) # make sure shape is on screen
         self.enabled = True # if the shape can still be changed by the player
+        # shapes disable on contact with the heap
         self.grace = max_grace # number of grace movements before shape is added to heap
         self.index = index # index of current rotation starts 0
         self.chambers = shape_types[typ] # list of rotations the shape can have
@@ -179,17 +181,19 @@ def new_shape(typ=None): # generate a new shape
         typ = random.choice(typestrings)
     return Shape((-1,random.randint(0,W)),typ)
 
-def close(high:int) -> None: # save highscore and exit
+def close(high:int) -> None: # save high score and exit
     with open(f'{dir}/high.txt','w') as f:
         f.write(str(high))
         f.close()
     exit()
 
 shapes = [new_shape()] # start with one random shape
+# generate the next three random shapes
 nexts = [random.choice(typestrings),random.choice(typestrings),random.choice(typestrings)]
 hold = 0 # the currently held shape is null
 field = Field(W,H) # create the playfield
 swapped = False # whether the current shape has been swapped with the held shape, starts False
+# only one swap is allowed until the current shape is disabled
 
 # initialize pygame window and font
 pygame.init()
@@ -271,13 +275,13 @@ while __name__ == '__main__': # event loop
 
         elif keys[pygame.K_h] and not swapped: # hold
             pygame.time.delay(input_delay*2)
-            if not hold:
+            if not hold: # if this is the first held piece, hold it
                 hold = new_shape(shape.type)
                 shapes.pop()
                 shapes.append(new_shape(nexts[-1]))
                 nexts.pop(-1)
                 nexts.insert(0,random.choice(typestrings))
-            else:
+            else: # if there is a held piece, swap it with the current one
                 temp = copy(hold)
                 hold = new_shape(shape.type)
                 shapes.pop()
@@ -287,7 +291,7 @@ while __name__ == '__main__': # event loop
             swapped = True
 
         step += 1   
-        if step % fall_speed == 0: shape.drop(field)# shape drops every fall_speed frames 
+        if step % fall_speed == 0: shape.drop(field) # shape drops every fall_speed frames 
     
         shape.x = max(0,min(W-len(shape.mat[0]),shapes[-1].x)) # adjust x position of shape
         highscore = max(highscore,score)
