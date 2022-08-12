@@ -21,3 +21,5 @@ Make sure that `high.txt` and `font.ttf` are in the same directory as `tetris.py
 
 ## Controls
 The game is played entirely with the keyboard. Press Q to toggle pause, ESC to exit, and R to restart on game over. use the left and right arrows to move the current shape left or right. Use the up arrow to rotate the shape 90 degrees counterclockwise. Press the down arrow to soft drop and the space bar to hard drop. Press H to swap the current piece.
+
+![tetris](https://user-images.githubusercontent.com/68828123/184267959-a6196e0d-2ec2-4fbe-832e-e63159c56bd7.gif)
