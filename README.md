@@ -10,9 +10,8 @@ pip install pygame
 ## Configuration
 There are six parameters that are reasonable to configure. They can be changed in the following lines:
 ```
-07 P = 70 # cell size in pixels
-08 input_delay = 10 # delay on keyboard input in milliseconds
-09 delay = 50 # constant delay in milliseconds
+08 P = 30 # cell size in pixels
+09 target_fps = 30
 10 max_grace = 4 # number of grace moves per piece
 11 projection = True # whether the ghost piece appears
 12 fall_speed = 4 # number of frames between every shape drop
