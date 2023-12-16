@@ -1,22 +1,23 @@
-import pygame, random # to run game and generate random pieces
-from copy import deepcopy as copy # to copy the content of a piece for the ghost
-from os import path # to read highscore and font
+import pygame, random # to run game and generate random shapes
+from copy import deepcopy as copy # to copy a shape to make projection
+from os import path # to read high score and font
+from datetime import datetime # to manage frame rate
 
-# ================================================================================
+# =================================================================================================
 
-P = 70 # cell size in pixels
-input_delay = 10 # delay on keyboard input in milliseconds
-delay = 50 # constant delay in milliseconds
+P = 30 # cell size in pixels
+target_fps = 30
 max_grace = 4 # number of grace moves per piece
 projection = True # whether the ghost piece appears
 fall_speed = 4 # number of frames between every shape drop
 
-# ================================================================================
+# =================================================================================================
 
 W = 10 # playfield width in cells
 H = 24 # playfield height in cells
+target_frametime = 1/target_fps # target time per frame in seconds
 
-# read highscore from file
+# read high score from file
 dir = path.dirname(path.realpath(__file__))
 with open(f'{dir}/high.txt','r') as f:
     highscore = f.read()
@@ -101,6 +102,8 @@ color_lookup = [
     '#abb2bf', # white
     '#20242d'] # hud
 
+# =================================================================================================
+
 class Shape:
     def __init__(self,pos:(int,int),typ:str,index:int=0):
         self.type = typ # save typestring
@@ -111,81 +114,74 @@ class Shape:
         # shapes disable on contact with the heap
         self.grace = max_grace # number of grace movements before shape is added to heap
         self.index = index # index of current rotation starts 0
-        self.chambers = shape_types[typ] # list of rotations the shape can have
+        self.chambers = shape_types[typ] # list of rotation matrices the shape can have
 
-    def chamber(self,f) -> None: # rotate the shape 90 degrees counterclockwise
+    def chamber(self,f) -> None: # rotate the shape 90 degrees clockwise
         mat = self.mat
-        self.index += 1 # change rotation
-        self.mat = self.chambers[self.index % len(self.chambers)] # change matrix according to rotation
+        self.index -= 1 # change rotation
+        self.mat = self.chambers[self.index % len(self.chambers)] # update matrix with rotation
         if collision(self,f): # reset matrix and rotation if the rotation causes a collision
-            self.index -= 1
-            self.mat = mat
+            self.index += 1; self.mat = mat
 
     def drop(self,f) -> None: # move one cell down
         self.y += 1
-        if collision(self,f.mat) and self.enabled and not self.grace: # if no grace moves left on collision, add shape to heap
-            f.add_shape(self,(self.x,self.y-1))
+        if collision(self,f.mat) and self.enabled and not self.grace: # if no grace moves left
+            f.add_shape(self,(self.x,self.y-1)) # add shape to heap on coliision
             self.enabled = False # disable the shape to tell the program to generate a new one
-        elif collision(self,f.mat) and self.enabled and self.grace: # on collision, reduce grace moves
-            self.grace -= 1
-            self.y -= 1
+        elif collision(self,f.mat) and self.enabled and self.grace: # reduce grace moves
+            self.grace -= 1; self.y -= 1
         elif not collision: # if there is no collision, grace movements reset
             self.grace = max_grace
 
     def hard_drop(self,f) -> None: # drop until collision
-        while not collision(self,f.mat):
-            self.drop(f)
+        while not collision(self,f.mat): self.drop(f)
 
 class Field:
     def __init__(self,w:int,h:int):
         self.mat = [[0]*w for _  in range(h)] # matrix starts as a wxh grid of 0s
-        self.dimens = (w,h)
+        self.w, self.h = w, h
 
     def reset(self) -> None: # reset matrix
-        self.mat = [[0]*self.dimens[0] for _ in range(self.dimens[1])]
+        self.mat = [[0]*self.w for _ in range(self.h)]
 
     def clear(self,score:int) -> int: # clear filled rows
-        for row in range(len(self.mat)): # set filled rows to 0
-            if 0 not in self.mat[row]:
-                self.mat[row] = 0
-        while 0 in self.mat: # remove all rows that are 0
-            self.mat.remove(0)
-        score += 50*(self.dimens[1]-len(self.mat))
-        while len(self.mat) != self.dimens[1]: # add empty rows on top to maintain height
-            self.mat.insert(0,[0]*self.dimens[0])
+        for row in range(len(self.mat)): # set filled rows to 0 to represent filled
+            if 0 not in self.mat[row]: self.mat[row] = 0 
+        while 0 in self.mat: self.mat.remove(0) # remoce filled rows
+        score += 50*(self.h-len(self.mat))
+        while len(self.mat) != self.h: self.mat.insert(0,[0]*self.w) # add rows to retain height
         return score
 
-    def add_shape(self,shape:Shape,off:(int,int)) -> None: # add a shape to the heap
-        x,y = off
-        for r in range(len(shape.mat)): # add all non-0 values from the shape matrix to the field matrix
+    def add_shape(self,shape:Shape,offset:(int,int)) -> None: # add a shape to the heap
+        x,y = offset # coordinates of the shape
+        # add all non-0 values from the shape matrix to the field matrix
+        for r in range(len(shape.mat)):
             for c in range(len(shape.mat[0])):
                 if shape.mat[r][c]: self.mat[y+r][x+c] = shape.mat[r][c]    
 
-def draw(g,off:(int,int),scr,p:int,shape=False) -> None: # draw a matrix with a given offset on the screen
-    x, y = off
+def draw(g,offset:(int,int),scr,p:int,shape=False) -> None: 
+    x, y = offset
+    # draw a matrix with a given offset on the screen
     for r in range(len(g)):
         for c in range(len(g[0])):
-            if g[r][c] or not shape:  pygame.draw.rect(scr, color_lookup[g[r][c]], (x+c*p,y+r*p,p,p))
+            if g[r][c] or not shape: pygame.draw.rect(scr, color_lookup[g[r][c]],(x+c*p,y+r*p,p,p))
             
 def collision(s,g) -> bool: # check of two matrices collide
     x, y = s.x, s.y
     for r in range(len(s.mat)):
         for c,cell in enumerate(s.mat[r]):
-            try:
+            try: 
                 if cell and g[y+r][x+c]: return True
             except IndexError: return True
     return False
-                    
-def new_shape(typ=None): # generate a new shape
-    if typ == None:
-        typ = random.choice(typestrings)
+
+def new_shape(typ=random.choice(typestrings)): # generate a new random shape
     return Shape((-1,random.randint(0,W)),typ)
 
 def close(high:int) -> None: # save high score and exit
-    with open(f'{dir}/high.txt','w') as f:
-        f.write(str(high))
-        f.close()
-    exit()
+    with open(f'{dir}/high.txt','w') as f: f.write(str(high)); f.close(); exit()
+
+# =================================================================================================
 
 shapes = [new_shape()] # start with one random shape
 # generate the next three random shapes
@@ -218,7 +214,11 @@ ne = font.render('next',True,color_lookup[8])
 ner = ho.get_rect()
 ner.topleft = (P*(W+2),P*3)
 
+# =================================================================================================
+
 while __name__ == '__main__': # event loop
+    dt1 = datetime.now()
+
     screen.fill(color_lookup[9])
     shape = shapes[-1] # currently active shape
 
@@ -231,61 +231,40 @@ while __name__ == '__main__': # event loop
     if field.mat[2] != [0]*W: gameover = True # game ends when top visible row has a block
 
     # react to input
-    if keys[pygame.K_q] and not gameover: # pause
-        pygame.time.delay(input_delay)
-        paused = not paused
+    if keys[pygame.K_q] and not gameover: paused ^= 1
 
     if keys[pygame.K_r] and gameover: # restart
-        gameover = False
-        field.reset()
-        shapes = [new_shape()]
-        score = 0
-        hold = 0
+        gameover = False; score = 0; hold = 0; swapped = False
+        field.reset(); shapes = [new_shape()]
         nexts = [random.choice(typestrings),random.choice(typestrings),random.choice(typestrings)]
-        swapped = False
 
-    if not paused and not gameover:
+    if not paused and not gameover and keys:
         if keys[pygame.K_LEFT]: # move left
-            pygame.time.delay(input_delay)
-            shape.x -= 1
+            shape.x -= 1; pygame.time.delay(50)
             if collision(shape,field.mat): shape.x += 1
 
         elif keys[pygame.K_RIGHT]: # move right
-            pygame.time.delay(input_delay)
-            shape.x += 1
+            shape.x += 1; pygame.time.delay(50)
             if collision(shape,field.mat): shape.x -= 1
         
-        elif keys[pygame.K_UP]: # rotate
-            pygame.time.delay(input_delay)
-            shape.chamber(field.mat)
+        elif keys[pygame.K_UP]: pygame.time.delay(100); shape.chamber(field.mat) # rotate
 
         elif keys[pygame.K_DOWN]: # soft drop
-            pygame.time.delay(input_delay)
-            shape.y += 1
-            score += 1
-            if collision(shape,field.mat):
-                shapes[-1].y -= 1
-                score -= 1
+            shape.y += 1; score += 1
+            if collision(shape,field.mat): shapes[-1].y -= 1; score -= 1
 
         elif keys[pygame.K_SPACE] and shape.y > 1: # hard drop
-            pygame.time.delay(input_delay)
-            y = shape.y
-            shape.hard_drop(field)
-            score += 2*(shape.y-y)
+            y = shape.y; shape.hard_drop(field); score += 2*(shape.y-y)
 
         elif keys[pygame.K_h] and not swapped: # hold
-            pygame.time.delay(input_delay*2)
             if not hold: # if this is the first held piece, hold it
                 hold = new_shape(shape.type)
-                shapes.pop()
-                shapes.append(new_shape(nexts[-1]))
-                nexts.pop(-1)
-                nexts.insert(0,random.choice(typestrings))
+                shapes.pop(); shapes.append(new_shape(nexts[-1]))
+                nexts.pop(-1); nexts.insert(0,random.choice(typestrings))
             else: # if there is a held piece, swap it with the current one
                 temp = copy(hold)
                 hold = new_shape(shape.type)
-                shapes.pop()
-                shapes.append(copy(temp))
+                shapes.pop(); shapes.append(copy(temp))
                 shape = shapes[-1]
                 del temp
             swapped = True
@@ -293,7 +272,7 @@ while __name__ == '__main__': # event loop
         step += 1   
         if step % fall_speed == 0: shape.drop(field) # shape drops every fall_speed frames 
     
-        shape.x = max(0,min(W-len(shape.mat[0]),shapes[-1].x)) # adjust x position of shape
+        shape.x = max(0,min(W-len(shape.mat[0]),shape.x)) # adjust x position of shape
         highscore = max(highscore,score)
     
     score = field.clear(score) # clear filled rows and increase score
@@ -313,10 +292,8 @@ while __name__ == '__main__': # event loop
     if shapes[-1].enabled: draw(shapes[-1].mat,(P+P*shapes[-1].x,P+P*shapes[-1].y),screen,P,True)
 
     if not shape.enabled: # generate a new shape if the current one is disabled
-        shapes.pop()
-        shapes.append(new_shape(nexts[-1]))
-        nexts.pop(-1)
-        nexts.insert(0,random.choice(typestrings))
+        shapes.pop(); shapes.append(new_shape(nexts[-1]))
+        nexts.pop(-1); nexts.insert(0,random.choice(typestrings))
         swapped = False
 
     pygame.draw.rect(screen,color_lookup[9],(0,0,P*(W+2),P*3)) # hud background
@@ -343,5 +320,8 @@ while __name__ == '__main__': # event loop
 
     if hold: draw(hold.mat,((W+2)*P,P*3//2),screen,P//2,True) # draw held shape
     
-    pygame.time.delay(delay)
+    timeD = (datetime.now()-dt1).microseconds/1e6 # frame time in seconds
+    # delay until the target frame time is reached
+    if timeD < target_frametime: pygame.time.delay(int((target_frametime-timeD)*1e3))
+
     pygame.display.update()
