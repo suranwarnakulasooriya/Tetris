@@ -9,7 +9,7 @@ P = 30 # cell size in pixels
 target_fps = 30
 max_grace = 4 # number of grace moves per piece
 projection = True # whether the ghost piece appears
-fall_speed = 4 # number of frames between every shape drop
+fall_speed = 6 # number of frames between every shape drop
 
 # =================================================================================================
 
@@ -226,12 +226,12 @@ while __name__ == '__main__': # event loop
     for event in pygame.event.get():
         if event.type == pygame.QUIT: close(highscore)
     keys = pygame.key.get_pressed()
-    if keys[pygame.K_ESCAPE]: close(highscore)
+    if keys[pygame.K_q]: close(highscore)
     
     if field.mat[2] != [0]*W: gameover = True # game ends when top visible row has a block
 
     # react to input
-    if keys[pygame.K_q] and not gameover: paused ^= 1
+    if keys[pygame.K_p] and not gameover: paused ^= 1
 
     if keys[pygame.K_r] and gameover: # restart
         gameover = False; score = 0; hold = 0; swapped = False
