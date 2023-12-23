@@ -1,8 +1,3 @@
-# TODO:
-# use block characters instead of # sign
-# remove spacing in terminal app
-# use switch statements (need python 3.10+)
-
 # DEPENDENCIES ====================================================================================
 
 from random import randint, choice # to generate random pieces
