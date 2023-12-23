@@ -234,7 +234,6 @@ while __name__ == '__main__':
         # reset clock, input, and screen
         dt1 = datetime.now()
         input_char = stdscr.getch()
-        linestr = ''
         stdscr.erase()
 
         shape = shapes[-1] # currently active shape
