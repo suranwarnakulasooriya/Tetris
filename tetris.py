@@ -12,9 +12,6 @@ import curses # i/o
 W,H = 10,20 # playfield dimensions
 target_fps = 30 # target frames per second
 max_grace = 4 # number of grace moves per piece
-projection = True # whether the ghost piece appears
-fall_speed = 6 # number of frames between every shape drop
-ui_color = True # whether the pieces have color or not
 block_character = '█' # pick from █ , # , ∎ , ■ or others
 
 # CLASSES =========================================================================================
@@ -32,8 +29,7 @@ class Shape:
         self.chambers = shape_types[typ] # list of rotation matrices the shape can have
 
     def chamber(self,f) -> None: # rotate the shape 90 degrees clockwise
-        mat = self.mat
-        self.index -= 1 # change rotation
+        mat = self.mat; self.index -= 1 # save current matrix and change rotation
         self.mat = self.chambers[self.index % len(self.chambers)] # update matrix with rotation
         if collision(self,f): # reset matrix and rotation if the rotation causes a collision
             self.index += 1; self.mat = mat
@@ -51,7 +47,7 @@ class Shape:
     def hard_drop(self,f) -> None: # drop until collision
         while not collision(self,f.mat): self.drop(f)
 
-class Field:
+class Heap:
     def __init__(self,w:int,h:int):
         self.mat = [[0]*w for _  in range(h)] # matrix starts as a wxh grid of 0s
         self.w, self.h = w, h # dimensions
@@ -68,64 +64,57 @@ class Field:
 
     def add_shape(self,shape:Shape,offset:(int,int)) -> None: # add a shape to the heap
         x,y = offset # coordinates of the shape
-        # add all non-0 values from the shape matrix to the field matrix
+        # add all non-0 values from the shape matrix to the heap matrix
         for r in range(len(shape.mat)):
             for c in range(len(shape.mat[0])):
                 if shape.mat[r][c]: self.mat[y+r][x+c] = shape.mat[r][c]    
 
 # FUNCTIONS =======================================================================================
 
-def collision(s,g) -> bool: # check if two matrices collide
-    x, y = s.x, s.y
+def collision(s:Shape,g:Heap) -> bool: # check if two matrices collide
+    x, y = s.x, s.y # position of shape
     for r in range(len(s.mat)):
         for c,cell in enumerate(s.mat[r]):
             try: 
-                if cell and g[y+r][x+c]: return True # s matrix and g matrix have a block at x,y
+                if cell and g[y+r][x+c]: return True # if s matrix and g matrix have a block at x,y
             except IndexError: return True
     return False
 
 typestrings = ['T','S','Z','J','L','I','O']
-def new_shape(typ=choice(typestrings)): return Shape((0,randint(0,W)),typ) # new random shape
+def new_shape(typ:str=choice(typestrings)) -> Shape: return Shape((0,randint(0,W)),typ) # new shape
 
 def close(high:int,score:int) -> None: # save high score and exit
-    stdscr.keypad(0); curses.nocbreak(); curses.endwin()# end curses
+    stdscr.keypad(0); curses.nocbreak(); curses.endwin() # end curses
     with open(f'{dir}/high.txt','w') as f:
         f.write(str(high)); f.close(); exit(f'GAME ENDED | SCORE: {score}')
 
-def add_mat(cli,g,offset:(int,int),colors=True,ghost=False) -> None: # add a matrix to the cli
-    x, y = offset
-    # add a matrix with a given offset to the screen
-    for r in range(len(g)):
-        for c in range(len(g[0])):
-            if g[r][c]: cli[r+y][c+x] = g[r][c]
+def blit_block(scr:curses.window,y:int,x:int,char:int,colors:bool=True) -> None: # draw a block
+    try:
+        if colors: scr.addstr(y,x,block_character,curses.color_pair(char))
+        else:
+            if char == 8: scr.addstr(y,x,'•') # ghost
+            else: scr.addstr(y,x,block_character) # regular block
+    except: pass
 
-def blit(char,colors=True): # draw a single block
-    if colors: stdscr.addstr(block_character,curses.color_pair(color_lookup[char]))
-    else:
-        if char == 8: stdscr.addstr('•')
-        else: stdscr.addstr(block_character)
-
-def sidebar_blit(piece,row,offset:int=2,colors=True): # blit a shape to the sidebar
-    try: # print each row of the matrix
-        for cell in piece.mat[row-offset]:
-            if cell: blit(cell,colors=ui_color)
-            else: stdscr.addstr(' ')
-        stdscr.addstr(' '*(4-len(piece.mat[row-offset]))+'│')
-    except IndexError: stdscr.addstr('    │')
+def blit_mat(scr:curses.window,mat:list[list[int]],pos:(int,int),colors:bool=True) -> None:
+    for r in range(len(mat)): # draw a matrix on a given screen
+        for c in range(len(mat[0])):
+            if mat[r][c]: blit_block(scr,r+1+pos[0],c+1+pos[1],mat[r][c],colors=colors)
 
 # SETUP ===========================================================================================
 
 if __name__ == '__main__':
     target_frametime = 1/target_fps # target time per frame in seconds
-    cli = [[' ']* W for _ in range(H)] # list of strs to display the gameq in terminal
+    fall_speed = 6 # number of frames between every shape drop
+    tui_color = True # whether the pieces have color or not
+    projection = True # whether the ghost piece appears
 
     # read high score from file
     dir = path.dirname(path.realpath(__file__))
-    with open(f'{dir}/high.txt','r') as f: highscore = f.read(); f.close()
-    highscore.strip(); highscore = int(highscore)
+    with open(f'{dir}/high.txt','r') as f: highscore = int(f.read().strip()); f.close()
     score = 0
 
-    W = max(6,W); H = max(22,H+2) # clamp width and height to minimum dimensions
+    W = max(6,W); H = max(20,H) # clamp width and height to minimum dimensions
 
     step = 0; paused = False; gameover = False
 
@@ -133,90 +122,82 @@ if __name__ == '__main__':
     # numbers indicate color, 0 is blank/background
     shape_types = {
         'T':[
-        [[1,1,1],
-         [0,1,0]],
-        [[1,0],
-         [1,1],
-         [1,0]],
-        [[0,1,0],
-         [1,1,1]],
-        [[0,1],
-         [1,1],
-         [0,1]]],
+        [[6,6,6],
+         [0,6,0]],
+        [[6,0],  
+         [6,6],
+         [6,0]],
+        [[0,6,0],
+         [6,6,6]],
+        [[0,6],
+         [6,6],
+         [0,6]]],
         'S':[
-        [[0,2,2],
-         [2,2,0]],
-        [[2,0],
-         [2,2],
-         [0,2]]],
-        'Z':[
-        [[3,3,0],
-         [0,3,3]],
-        [[0,3],
+        [[0,3,3],
+         [3,3,0]],
+        [[3,0],
          [3,3],
-         [3,0]]],
+         [0,3]]],
+        'Z':[
+        [[2,2,0],
+         [0,2,2]],
+        [[0,2],
+         [2,2],
+         [2,0]]],
         'J':[
-        [[4,0,0],
-         [4,4,4]],
-        [[0,4],
-         [0,4],
-         [4,4]],
-        [[4,4,4],
-         [0,0,4]],
-        [[4,4],
-         [4,0],
-         [4,0]]],
-        'L':[
-        [[0,0,5],
+        [[5,0,0],
          [5,5,5]],
-        [[5,5],
+        [[0,5],
          [0,5],
-         [0,5]],
+         [5,5]],
         [[5,5,5],
-         [5,0,0]],
-        [[5,0],
+         [0,0,5]],
+        [[5,5],
          [5,0],
-         [5,5]]],
+         [5,0]]],
+        'L':[
+        [[0,0,4],
+         [4,4,4]],
+        [[4,4],
+         [0,4],
+         [0,4]],
+        [[4,4,4],
+         [4,0,0]],
+        [[4,0],
+         [4,0],
+         [4,4]]],
         'I':[
-        [[6,6,6,6]],
-        [[6],
-         [6],
-         [6],
-         [6]]],
+        [[7,7,7,7]],
+        [[7],
+         [7],
+         [7],
+         [7]]],
         'O':[
-        [[7,7],
-         [7,7]]]}
-
-    color_lookup = [ # map numbers from shape_types to curses.color_pair() values
-        1,   # black
-        136, # magenta
-        43,  # green
-        197, # red
-        40,  # blue
-        209, # orange
-        52,  # cyan
-        215, # yellow
-        9]   # white
+        [[4,4],
+         [4,4]]]}
 
     shapes = [new_shape()] # start with one random shape
-    # generate the next three random shapes
-    nexts = [choice(typestrings),choice(typestrings),choice(typestrings)]
-    hold = 0 # the currently held shape is null
-    field = Field(W,H) # create the playfield
-    swapped = False # whether the current shape has been swapped with the held shape, starts False
+    nexts = [choice(typestrings),choice(typestrings),choice(typestrings)] # next three shapes
+    hold = 0; swapped = False # no held shape; if the current shape has been swapped
     # only one swap is allowed until the current shape is disabled
+    heap = Heap(W,max(22,H+2)) # empty playfield
 
-    # initialize curses window and colors
-    stdscr = curses.initscr()
-    curses.start_color(); curses.use_default_colors()
-    curses.cbreak(); curses.noecho()
-    stdscr.nodelay(True) # make curses.getch() nonblocking
-    stdscr.keypad(True) # accept keypad escape sequences
+    curses.initscr() # init curses window
+    stdscr = curses.newwin(H+4,W+10,0,0) # whole screen
+    tetrisscr = stdscr.subwin(H+2,W+2,1,1) # game
+    nextscr = stdscr.subwin(10,6,5,W+3) # next pieces
+    holdscr = stdscr.subwin(4,6,1,W+3) # hold piece
+    scorescr = stdscr.subwin(3,6,15,W+3) # score
+    highscr = stdscr.subwin(3,6,18,W+3) # highscore
+    fillscr = stdscr.subwin(H-18,6,21,W+3) # empty box to fill screen
 
-    # generate 256 colors, the i values are used by color_lookup
-    for i in range(0,curses.COLORS):
-            try: curses.init_pair(i+1,i,-1)
-            except curses.ERR: pass
+    curses.start_color(); curses.use_default_colors() # use ansi colors
+    curses.cbreak(); curses.noecho(); curses.curs_set(0) # no echo and hide curser
+    stdscr.nodelay(True); stdscr.keypad(True) # nonblocking keyboard input
+
+    for i in range(0,8): # generate ansi colors, i values are used directly in color_pair()
+        try: curses.init_pair(i+1,i,-1)
+        except curses.ERR: pass
 
 # EVENT LOOP ======================================================================================
 
@@ -235,106 +216,57 @@ while __name__ == '__main__':
             for r in range(len(ghost.mat)):
                 for c in range(len(ghost.mat[0])):
                     if ghost.mat[r][c]: ghost.mat[r][c] = 8
-            while not collision(ghost,field.mat): ghost.y += 1    
+            while not collision(ghost,heap.mat): ghost.y += 1    
             ghost.y -= 1
-
-        next_blits = [Shape((0,0),n) for _,n in enumerate(nexts[::-1])] # next shapes to render
 
         # RENDER ==================================================================================
 
-        cli = [[' ']* W for _ in range(H)] # game board cli
-        add_mat(cli,field.mat,(0,0),colors=ui_color) # add playfield matrix to xli
-        if projection and shape.enabled and not gameover: # add ghost shape
-            add_mat(cli,ghost.mat,(ghost.x,ghost.y),colors=ui_color,ghost=True)
-        if not gameover: # add active shape
-            add_mat(cli,shape.mat,(shape.x,shape.y),colors=ui_color)
+        if projection and not gameover: blit_mat(tetrisscr,ghost.mat,(ghost.y-2,ghost.x),tui_color)
+        if hold: blit_mat(holdscr,hold.mat,(0,0),tui_color) # render held piece
+        blit_mat(tetrisscr,shape.mat,(shape.y-2,shape.x),tui_color) # render active shape
+        blit_mat(tetrisscr,heap.mat[2:],(0,0),tui_color) # render heap
+        next_blits = [Shape((0,0),n) for _,n in enumerate(nexts[::-1])] # next shapes to render
+        for i,n in enumerate(next_blits): blit_mat(nextscr,n.mat,(3*i,0),tui_color) # next shapes
 
-        # header text
-        if gameover:
-            stdscr.addstr('╭'+ '─'*((W+8-12)//2) + 'R TO RESTART' + '─'*((W+8-12)//2+W%2) + '╮\n')
-        elif paused: stdscr.addstr('╭'+ '─'*((W+8-6)//2) + 'PAUSED' + '─'*((W+8-6)//2+W%2) + '╮\n')
-        else: stdscr.addstr('╭'+ '─'*(W+8) + '╮\n')
-
-        stdscr.addstr('│╭' + '─'*((W-6)//2) + 'TETRIS' + '─'*(((W-6)//2)+W%2) + '╮╭HOLD╮│\n')
-
-        # rest of the game board
-        for row in range(2,len(cli)):
-
-            # playfield
-            stdscr.addstr('││')
-            for char in cli[row]:
-                if char == ' ': stdscr.addstr(' ')
-                else: blit(char,colors=ui_color)
-
-            stdscr.addstr('│')
-            
-            # held piece ui
-            if 2 <= row <= 3: # the held piece is shown in rows 2 and 3
-                stdscr.addstr('│')
-                if hold: sidebar_blit(hold,row,colors=ui_color)
-                else: stdscr.addstr('    │')
-            
-            # next pieces ui 
-            elif row == 5: stdscr.addstr('╭NEXT╮')
-            elif row in [6,7, 9,10, 12,13]: # rows for the next pieces
-                stdscr.addstr('│')
-                if 6 <= row <= 7: sidebar_blit(next_blits[0],row,6,colors=ui_color)
-                elif 9 <= row <= 10: sidebar_blit(next_blits[1],row,9,colors=ui_color)
-                elif 12 <= row <= 13: sidebar_blit(next_blits[2],row,12,colors=ui_color)
-            
-            # score and highs core
-            elif row == 15: stdscr.addstr('╭SCOR╮')
-            elif row == 16: stdscr.addstr(f'│{score:04}│')
-            elif row == 18: stdscr.addstr('╭HIGH╮')
-            elif row == 19: stdscr.addstr(f'│{highscore:04}│')
-
-            # empty box to fill up height
-            elif row == 21: stdscr.addstr('╭────╮')
-            elif row > 21 and row != H: stdscr.addstr('│    │')
-
-            # sides and bottoms of sidebar panels
-            elif row in [8,11]: stdscr.addstr('│    │')
-            elif row in [4,14,17,20]: stdscr.addstr('╰────╯')
-
-            stdscr.addstr('│\n') # next line
-
-        # bottom of screen
-        stdscr.addstr('│╰'+'─'*W+'╯╰────╯│\n'); stdscr.addstr('╰'+ '─'*(W+8) + '╯\n')
+        stdscr.border(); fillscr.border() # borders of boxes
+        tetrisscr.border(); holdscr.border(); scorescr.border(); highscr.border(); nextscr.border()
+        holdscr.addstr(0,1,'HOLD'); nextscr.addstr(0,1,'NEXT')
+        scorescr.addstr(0,1,'SCOR'); scorescr.addstr(1,1,f'{score:04}')
+        highscr.addstr(0,1,'HIGH'); highscr.addstr(1,1,f'{highscore:04}')
 
         # GAME LOGIC ==============================================================================
 
-        if field.mat[2] != [0]*W: gameover = True # game ends when top visible row has a block
+        if heap.mat[2] != [0]*W: gameover = True # game ends when top visible row has a block
 
-        # quit with q or ESC
-        if input_char == ord('q'): close(highscore,score)
-        
-        # pause on p
-        if input_char == ord('p') and not gameover: paused ^= 1; #pygame.time.delay(20)
-
-        # restart on r
-        if input_char == ord('r') and gameover:
-            gameover = False; score = 0; hold = 0; swapped = False
-            field.reset(); shapes = [new_shape()]
+        if input_char == ord('q'): close(highscore,score) # quit on q
+        elif input_char == ord('p') and not gameover: paused ^= 1;  # pause on p
+        elif input_char == ord('c'): tui_color ^= 1 # toggle colors on c
+        elif input_char == ord('g'): projection ^= 1 # toggle ghost shape on g
+        elif input_char == ord('r') and (gameover or paused): # restart on r
+            gameover = False; score = 0; hold = 0; swapped = False; paused = False
+            heap.reset(); shapes = [new_shape()]; shape = shapes[-1]
             nexts = [choice(typestrings),choice(typestrings),choice(typestrings)]
 
-        if not paused and not gameover:
+        if gameover: stdscr.addstr(0,(W+10)//2-6,'R TO RESTART')
+        elif paused: stdscr.addstr(0,(W+10)//2-3,'PAUSED')
+        else:
             if input_char == curses.KEY_LEFT: # move left
                 shape.x -= 1
-                if collision(shape,field.mat): shape.x += 1
+                if collision(shape,heap.mat): shape.x += 1
 
             elif input_char == curses.KEY_RIGHT: # move right
                 shape.x += 1
-                if collision(shape,field.mat): shape.x -= 1
-            
+                if collision(shape,heap.mat): shape.x -= 1
+
             # rotate
-            elif input_char == curses.KEY_UP : shape.chamber(field.mat)
+            elif input_char == curses.KEY_UP : shape.chamber(heap.mat)
 
             elif input_char == curses.KEY_DOWN: # soft drop
                 shape.y += 1
-                if collision(shape,field.mat): shapes[-1].y -= 1
-            
+                if collision(shape,heap.mat): shapes[-1].y -= 1
+
             elif input_char == ord(' ') and shape.y > 1: # hard drop
-                y = shape.y; shape.hard_drop(field)
+                y = shape.y; shape.hard_drop(heap)
 
             elif input_char == ord('h') and not swapped: # hold
                 if not hold: # if this is the first held piece, hold it
@@ -350,12 +282,11 @@ while __name__ == '__main__':
                 swapped = True
 
             step += 1   
-            if step == fall_speed: shape.drop(field); step = 0 # drop every fall_speed frames 
-
+            if step == fall_speed: shape.drop(heap); step = 0 # drop every fall_speed frames
             shape.x = max(0,min(W-len(shape.mat[0]),shape.x)) # adjust x position of shape
             highscore = max(highscore,score) # set high score
 
-        score = field.clear(score) # clear filled rows and increase score
+        score = heap.clear(score) # clear filled rows and increase score
 
         if not shape.enabled: # generate a new shape if the current one is disabled
             shapes.pop(); shapes.append(new_shape(nexts[-1]))
@@ -366,4 +297,4 @@ while __name__ == '__main__':
         sleep(max(0,target_frametime-(datetime.now()-dt1).microseconds/1e6))
         stdscr.refresh()
 
-    except KeyboardInterrupt: close(highscore, score); exit(f'GAME ENDED | SCORE: {score}')
+    except KeyboardInterrupt: close(highscore, score) # quit on ^C
